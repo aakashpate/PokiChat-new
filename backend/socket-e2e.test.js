@@ -12,6 +12,15 @@ const log = (name, ok, extra = '') => {
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
+const waitFor = async (fn, timeout = 5000, step = 50) => {
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    if (fn()) return true;
+    if (Date.now() >= deadline) return false;
+    await wait(step);
+  }
+};
+
 const httpGet = (path, origin = ORIGIN) =>
   new Promise((resolve, reject) => {
     const http = transport;
@@ -155,12 +164,12 @@ const makeClient = (username) =>
     const a = await makeClient('Alice');
     const b = await makeClient('Bob');
     log('two clients connect', true);
-    await wait(500);
-    log('online users = 2', a.online === 2 && b.online === 2, `a=${a.online} b=${b.online}`);
+    const onlineOk = await waitFor(() => a.online === 2 && b.online === 2);
+    log('online users = 2', onlineOk, `a=${a.online} b=${b.online}`);
 
     a.socket.emit('send_message', { username: 'Alice', text: 'hello from Alice' });
-    await wait(600);
-    log('text message delivered', b.received.some((m) => m.text === 'hello from Alice'));
+    const textDelivered = await waitFor(() => b.received.some((m) => m.text === 'hello from Alice'));
+    log('text message delivered', textDelivered);
 
     a.socket.emit('send_message', {
       username: 'Alice',
@@ -168,7 +177,7 @@ const makeClient = (username) =>
       type: 'image',
       imageUrl,
     });
-    await wait(600);
+    await waitFor(() => b.received.some((m) => m.type === 'image'));
     const imageMsg = b.received.find((m) => m.type === 'image');
     log('image message delivered', !!imageMsg, imageMsg ? JSON.stringify(imageMsg) : 'missing');
     log('image message carries reactions field', imageMsg && typeof imageMsg.reactions === 'object');
@@ -179,7 +188,7 @@ const makeClient = (username) =>
       type: 'image',
       imageUrl: '/uploads/hack.png',
     });
-    await wait(400);
+    await waitFor(() => a.errors.includes('Upload the image before sending it'));
     log('rejects un-uploaded image path', b.received.every((m) => m.imageUrl !== '/uploads/hack.png'));
 
     if (imageMsg) {
@@ -188,20 +197,26 @@ const makeClient = (username) =>
         username: 'Alice',
         emoji: 'love',
       });
-      await wait(600);
+      const toggledOk = await waitFor(() => {
+        const t = b.reactions.find((r) => r._id === imageMsg._id);
+        return !!t && t.reactions?.Alice === 'love';
+      });
       const toggled = b.reactions.find((r) => r._id === imageMsg._id);
-      log('reaction broadcast', toggled && toggled.reactions?.Alice === 'love', JSON.stringify(toggled));
+      log('reaction broadcast', toggledOk, JSON.stringify(toggled));
 
       a.socket.emit('toggle_reaction', {
         messageId: imageMsg._id,
         username: 'Bob',
         emoji: 'laugh',
       });
-      await wait(600);
+      const secondOk = await waitFor(() => {
+        const t = b.reactions[b.reactions.length - 1];
+        return !!t && t._id === imageMsg._id && t.reactions?.Alice === 'love' && t.reactions?.Bob === 'laugh';
+      });
       const second = b.reactions[b.reactions.length - 1];
       log(
         'second user reaction merges',
-        second && second.reactions?.Alice === 'love' && second.reactions?.Bob === 'laugh',
+        secondOk,
         JSON.stringify(second?.reactions)
       );
 
@@ -210,25 +225,28 @@ const makeClient = (username) =>
         username: 'Alice',
         emoji: 'love',
       });
-      await wait(600);
+      const thirdOk = await waitFor(() => {
+        const t = b.reactions[b.reactions.length - 1];
+        return !!t && t._id === imageMsg._id && !t.reactions?.Alice;
+      });
       const third = b.reactions[b.reactions.length - 1];
-      log('same reaction toggles off', third && !third.reactions?.Alice, JSON.stringify(third?.reactions));
+      log('same reaction toggles off', thirdOk, JSON.stringify(third?.reactions));
 
       a.socket.emit('toggle_reaction', {
         messageId: imageMsg._id,
         username: 'Alice',
         emoji: 'rocket',
       });
-      await wait(500);
-      log('invalid emoji rejected', a.errors.includes('Invalid emoji type'), JSON.stringify(a.errors));
+      const emojiOk = await waitFor(() => a.errors.includes('Invalid emoji type'));
+      log('invalid emoji rejected', emojiOk, JSON.stringify(a.errors));
     }
 
     a.socket.emit('typing_start');
-    await wait(400);
-    log('typing indicator', b.typing.includes('start:Alice'));
+    const typingOk = await waitFor(() => b.typing.includes('start:Alice'));
+    log('typing indicator', typingOk);
     a.socket.emit('typing_stop');
-    await wait(400);
-    log('typing stop', b.typing.includes('stop:Alice'));
+    const typingStopOk = await waitFor(() => b.typing.includes('stop:Alice'));
+    log('typing stop', typingStopOk);
 
     const post = await httpPost('/api/messages', { username: 'Bob', text: 'via REST' });
     log('REST create message', post.status === 201, post.body);
@@ -239,8 +257,8 @@ const makeClient = (username) =>
     log('history has image message', history.data.some((m) => m.type === 'image' && m.imageUrl));
 
     b.socket.disconnect();
-    await wait(600);
-    log('online drops after disconnect', a.online === 1, `a=${a.online}`);
+    const dropped = await waitFor(() => a.online === 1);
+    log('online drops after disconnect', dropped, `a=${a.online}`);
     a.socket.disconnect();
 
     const blocked = await new Promise((resolve) => {
