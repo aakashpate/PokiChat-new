@@ -18,7 +18,10 @@ const stripApiPath = (url) => stripTrailingSlash(url).replace(/\/api$/i, '');
 const rawApi = read(import.meta.env.VITE_API_URL);
 const rawSocket = read(import.meta.env.VITE_SOCKET_URL);
 
-const isDev = import.meta.env.DEV === true;
+// MODE is the reliable signal: DEV/PROD flip if NODE_ENV=production leaks into
+// the dev server process, which would otherwise disable the localhost fallback.
+const isDev =
+  import.meta.env.DEV === true || import.meta.env.MODE === 'development';
 
 const API_URL = isPlaceholder(rawApi)
   ? isDev
@@ -50,7 +53,7 @@ const configError = isConfigured
     ? 'Server address must use https:// — browsers block insecure (http) connections from this site.'
     : 'Server address is not configured. Set VITE_API_URL and VITE_SOCKET_URL before building.';
 
-if (!isConfigured && import.meta.env.DEV) {
+if (!isConfigured && isDev) {
   console.warn(`[PokiChat] ${configError}`);
 }
 
