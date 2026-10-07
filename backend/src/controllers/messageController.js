@@ -1,5 +1,7 @@
+const fs = require('fs/promises');
 const { isDBConnected } = require('../config/database');
 const { listMessages, createMessage: persistMessage } = require('../store/messages');
+const { saveUpload, diskPath } = require('../store/uploads');
 
 exports.getHealth = (req, res) => {
   res.json({
@@ -65,7 +67,7 @@ exports.createMessage = async (req, res, next) => {
   }
 };
 
-exports.uploadImage = (req, res, next) => {
+exports.uploadImage = async (req, res, next) => {
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -73,6 +75,13 @@ exports.uploadImage = (req, res, next) => {
         message: 'No image file provided',
       });
     }
+
+    const buffer = await fs.readFile(diskPath(req.file.filename));
+    await saveUpload({
+      filename: req.file.filename,
+      contentType: req.file.mimetype,
+      buffer,
+    });
 
     res.status(200).json({
       success: true,

@@ -1,10 +1,8 @@
-const fs = require('fs');
-const path = require('path');
 const { createMessage, toggleReaction } = require('../store/messages');
+const { imageAvailable } = require('../store/uploads');
 
 const VALID_REACTIONS = ['like', 'love', 'laugh', 'sad', 'angry'];
 const IMAGE_URL_PATTERN = /^\/uploads\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
-const UPLOADS_DIR = path.join(__dirname, '../../uploads');
 
 const chatSocket = (io) => {
   const connectedUsers = new Map();
@@ -46,9 +44,7 @@ const chatSocket = (io) => {
 
         if (isImage) {
           const uploaded =
-            imageUrl &&
-            IMAGE_URL_PATTERN.test(imageUrl) &&
-            fs.existsSync(path.join(UPLOADS_DIR, path.basename(imageUrl)));
+            imageUrl && IMAGE_URL_PATTERN.test(imageUrl) && (await imageAvailable(imageUrl));
 
           if (!uploaded) {
             socket.emit('message_error', {
