@@ -4,6 +4,12 @@ const { isDBConnected } = require('../config/database');
 const memoryMessages = [];
 let sequence = 0;
 
+// The public room keeps website traffic private from direct messages:
+// only messages without a conversation are visible to anonymous callers.
+const PUBLIC_ROOM_FILTER = {
+  $or: [{ conversation: { $exists: false } }, { conversation: null }],
+};
+
 const createId = () => {
   sequence += 1;
   return `mem_${Date.now().toString(16)}${sequence.toString(16)}`;
@@ -14,10 +20,10 @@ const sortByCreatedAt = (list) =>
 
 const listMessages = async () => {
   if (isDBConnected()) {
-    return Message.find().sort({ createdAt: 1 });
+    return Message.find(PUBLIC_ROOM_FILTER).sort({ createdAt: 1 });
   }
 
-  return sortByCreatedAt(memoryMessages);
+  return sortByCreatedAt(memoryMessages.filter((item) => !item.conversation));
 };
 
 const createMessage = async ({

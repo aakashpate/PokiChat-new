@@ -5,6 +5,8 @@ const { Server } = require('socket.io');
 const connectDB = require('./config/database');
 const app = require('./app');
 const chatSocket = require('./sockets/chatSocket');
+const realtime = require('./sockets/realtime');
+const { assertJwtConfig } = require('./config/jwt');
 const { allowedOrigins, isOriginAllowed, socketCorsOptions } = require('./config/cors');
 
 const PORT = Number(process.env.PORT) || 5000;
@@ -18,6 +20,8 @@ const io = new Server(server, {
   pingInterval: 25000,
 });
 
+realtime.attach(io);
+
 io.use((socket, next) => {
   const origin = socket.handshake.headers.origin;
   if (!isOriginAllowed(origin)) {
@@ -30,6 +34,15 @@ io.use((socket, next) => {
 chatSocket(io);
 
 const start = async () => {
+  try {
+    assertJwtConfig();
+  } catch (error) {
+    console.error('\n[FATAL] JWT configuration invalid.');
+    console.error(`  ${error.message}`);
+    console.error('  Set JWT_SECRET in backend/.env (copy backend/.env.example).\n');
+    process.exit(1);
+  }
+
   try {
     await connectDB();
   } catch (error) {

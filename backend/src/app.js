@@ -57,6 +57,9 @@ app.get('/', (req, res) => {
 });
 
 app.use('/api', messageRoutes);
+app.use('/api', require('./routes/authRoutes'));
+app.use('/api', require('./routes/userRoutes'));
+app.use('/api', require('./routes/conversationRoutes'));
 
 app.use('/api', (req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });
