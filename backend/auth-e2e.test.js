@@ -433,6 +433,21 @@ const emitAck = (socket, event, data, timeout = 8000) =>
     );
     log('socket rejects revoked session', socketAfterLogout === false);
 
+    const relogin = await login(nameA, password);
+    const reloginToken = relogin.json?.data?.token;
+    const meAfterRelogin = await request('GET', '/api/auth/me', { token: reloginToken });
+    let reloginVer = 'n/a';
+    try {
+      reloginVer = JSON.parse(Buffer.from(reloginToken.split('.')[1], 'base64').toString()).ver;
+    } catch (e) {
+      reloginVer = `decode-error:${e.message}`;
+    }
+    log(
+      'relogin after logout restores a working session',
+      relogin.status === 200 && meAfterRelogin.status === 200,
+      `login=${relogin.status} meAfter=${meAfterRelogin.status} token=${reloginToken ? 'yes' : 'NO'} reloginVer=${JSON.stringify(reloginVer)} msg=${JSON.stringify(meAfterRelogin.json || meAfterRelogin.body || {})}`
+    );
+
     socketB.socket.disconnect();
     socketC.socket.disconnect();
     await wait(200);

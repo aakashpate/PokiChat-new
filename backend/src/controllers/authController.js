@@ -96,7 +96,7 @@ exports.login = async (req, res, next) => {
     const asKey = trimmedIdentifier.toLowerCase();
     const user = await User.findOne({
       $or: [{ email: asKey }, { usernameKey: asKey }],
-    }).select('+passwordHash');
+    }).select('+passwordHash +tokenVersion');
 
     if (!user) {
       return res
